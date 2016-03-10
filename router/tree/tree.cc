@@ -1,145 +1,218 @@
 /*
-* Radix Tree in C++
+* Radix Tree in C++. <Copyright 2016 Lime lime.syh@gmail.com>
 */
 
 #include "tree.h"
 
 namespace radixtree {
 
-Request::Request(string path, string method) {
+int find(const string &str, char target, int start) {
+  auto i = str.find(target, start);
+  return i == -1 ? str.size() : i;
+}
+
+Request::Request(const string &path, const string &method) {
   this->path = path;
   this->method = method;
 }
 
-RadixTreeNode::RadixTreeNode(string path) {
+RadixTreeNode::RadixTreeNode(const string &path) {
   this->path = path;
 }
 
-int RadixTreeNode::addMethods(const vector<string> &methods,
-                              HandleFunc handler) {
+RadixTreeNode::~RadixTreeNode() {
+  for (auto &c : this->children)
+    delete c;
+}
+
+HandleFunc RadixTreeNode::getHandler(const string &method) {
+  for (auto &h : this->handlers) {
+    if (h.method == method) {
+      return h.handler;
+    }
+  }
+  return nullptr;
+}
+
+int RadixTreeNode::addHandler(
+    HandleFunc handler,
+    const vector<string> &methods) {
+
   for (auto &m : methods) {
-    if (this->methods.find(m) != this->methods.end() &&
-        this->methods[m] != handler)
+    auto oldHandler = this->getHandler(m);
+
+    if (oldHandler && oldHandler != handler)
       return -1;
-    this->methods[m] = handler;
+
+    this->handlers.push_back(Handler{m, handler});
   }
   return 0;
+}
+
+RadixTreeNode* RadixTreeNode::insertChild(
+    char index,
+    RadixTreeNode *child) {
+
+  auto i = this->getIndexPosition(index);
+  this->indices.insert(this->indices.begin() + i, index);
+  this->children.insert(this->children.begin() + i, child);
+  return child;
+}
+
+RadixTreeNode* RadixTreeNode::getChild(char index) {
+  auto i = this->getIndexPosition(index);
+  return this->indices[i] != index ? nullptr : this->children[i];
+}
+
+int RadixTreeNode::getIndexPosition(char target) {
+  int low = 0, high = this->indices.size(), mid;
+
+  while (low < high) {
+    mid = low + ((high - low) >> 1);
+    if (this->indices[mid] < target)
+      low = mid + 1;
+    else
+      high = mid;
+  }
+  return low;
 }
 
 RadixTree::RadixTree() {
-  this->root = make_shared<RadixTreeNode>();
+  this->root = new RadixTreeNode();
 }
 
-int RadixTree::insert(const string &key, HandleFunc handler,
-                      const vector<string> &methods) {
+RadixTree::~RadixTree() {
+  delete this->root;
+}
+
+int RadixTree::insert(
+    const string &path,
+    HandleFunc handler,
+    const vector<string> &methods) {
+
   auto root = this->root;
-  auto i = 0UL, n = key.size();
+  int i = 0, n = path.size(), paramCount = 0, code = 0;
 
   while (i < n) {
-    auto children = root->children;
-    auto empty = children.empty();
-    auto end = children.end();
-
-    if (children.find(ASTERISK) != end ||
-        (key[i] == ASTERISK && !empty) ||
-        (key[i] != COLON && children.find(COLON) != end) ||
-        (key[i] == COLON && !empty && children.find(COLON) == end) ||
-        (key[i] == COLON && children.find(COLON) != end && key.substr(
-          i + 1, this->getpos(key.find(SLASH, i), n) - i - 1
-          ) != children[COLON]->path)) {
-
-      return -1;
+    if (!root->indices.empty() && (
+        root->indices[0] == kAsterisk ||
+        path[i] == kAsterisk ||
+        (path[i] != kColon && root->indices[0] == kColon) ||
+        (path[i] == kColon && root->indices[0] != kColon) ||
+        (path[i] == kColon && root->indices[0] == kColon && path.substr(
+          i + 1, find(path, kSlash, i) - i - 1) != root->children[0]->path))) {
+      code = -1;
+      break;
     }
 
-    if (root->children.find(key[i]) == root->children.end()) {
-      auto p = key.find(COLON, i);
+    auto child = root->getChild(path[i]);
+    if (!child) {
+      auto p = find(path, kColon, i);
 
-      if (p == string::npos) {
-        p = key.find(ASTERISK, i);
+      if (p == n) {
+        p = find(path, kAsterisk, i);
 
-        if (p == string::npos) {
-          root = root->children[key[i]] = make_shared<RadixTreeNode>(
-            key.substr(i));
-          root->addMethods(methods, handler);
-        } else {
-          root = root->children[key[i]] = make_shared<RadixTreeNode>(
-            key.substr(i, p - i));
-          root = root->children[ASTERISK] = make_shared<RadixTreeNode>(
-            key.substr(p + 1));
-          root->addMethods(methods, handler);
+        root = root->insertChild(
+            path[i], new RadixTreeNode(path.substr(i, p - i)));
+
+        if (p < n) {
+          root = root->insertChild(
+            kAsterisk, new RadixTreeNode(path.substr(p + 1)));
+          ++paramCount;
         }
-        return 0;
+
+        code = root->addHandler(handler, methods);
+        break;
       }
 
-      root = root->children[key[i]] = make_shared<RadixTreeNode>(
-        key.substr(i, p - i));
+      root = root->insertChild(
+        path[i], new RadixTreeNode(path.substr(i, p - i)));
 
-      i = this->getpos(key.find(SLASH, p), n);
-      root = root->children[COLON] = make_shared<RadixTreeNode>(
-        key.substr(p + 1, i - p - 1));
+      i = find(path, kSlash, p);
+      root = root->insertChild(
+        kColon, new RadixTreeNode(path.substr(p + 1, i - p - 1)));
+      ++paramCount;
 
-      if (i == n)
-        return root->addMethods(methods, handler);
+      if (i == n) {
+        code = root->addHandler(handler, methods);
+        break;
+      }
 
     } else {
-      root = root->children[key[i]];
+      root = child;
 
-      if (key[i] == COLON) {
+      if (path[i] == kColon) {
+        ++paramCount;
         i += root->path.size() + 1;
-        if (i == n)
-          return root->addMethods(methods, handler);
+
+        if (i == n) {
+          code = root->addHandler(handler, methods);
+          break;
+        }
 
       } else {
         auto j = 0UL, m = root->path.size();
-        for (;i < n && j < m && key[i] == root->path[j]; ++i, ++j);
+
+        for (; i < n && j < m && path[i] == root->path[j]; ++i, ++j) {}
 
         if (j < m) {
-          auto child = make_shared<RadixTreeNode>(root->path.substr(j));
-          child->methods = root->methods;
+          auto child = new RadixTreeNode(root->path.substr(j));
+          child->handlers = root->handlers;
+          child->indices = root->indices;
           child->children = root->children;
 
-          root->children = {{root->path[j], child}};
           root->path = root->path.substr(0, j);
-          root->methods.clear();
+          root->handlers = {};
+          root->indices = child->path[0];
+          root->children = {child};
         }
 
-        if (i == n)
-          return root->addMethods(methods, handler);
+        if (i == n) {
+          code = root->addHandler(handler, methods);
+          break;
+        }
       }
     }
   }
-  return 0;
+
+  if (paramCount > this->root->maxParams)
+    this->root->maxParams = paramCount;
+
+  return code;
 }
 
-ParseResult RadixTree::get(const string &key, const string &method) {
-  unordered_map<string, string> params;
+ParseResult RadixTree::get(const string &path, const string &method) {
+  Params params = Params{new Parameter[root->maxParams]};
 
   auto root = this->root;
-  auto i = 0UL, p = 0UL, n = key.size();
+  int i = 0, n = path.size(), p;
 
   while (i < n) {
-    auto end = root->children.end();
-
-    if (root->children.find(COLON) != end) {
-      root = root->children[COLON];
-
-      p = this->getpos(key.find(SLASH, i), n);
-      params[root->path] = key.substr(i, p - i);
-      i = p;
-    } else if (root->children.find(ASTERISK) != end) {
-      root = root->children[ASTERISK];
-      params[root->path] = key.substr(i);
-      break;
-    } else if (root->children.find(key[i]) != end &&
-        key.substr(i, root->children[key[i]]->path.size()) ==
-        root->children[key[i]]->path) {
-      root = root->children[key[i]];
-      i += root->path.size();
-    } else {
+    if (root->indices.empty())
       return ParseResult();
+
+    if (root->indices[0] == kColon) {
+      root = root->children[0];
+
+      p = find(path, kSlash, i);
+      params.params[params.size++] = Parameter{
+        root->path, path.substr(i, p - i)};
+      i = p;
+
+    } else if (root->indices[0] == kAsterisk) {
+      root = root->children[0];
+      params.params[params.size++] = Parameter{root->path, path.substr(i)};
+      break;
+
+    } else {
+      root = root->getChild(path[i]);
+      if (!root || path.substr(i, root->path.size()) != root->path)
+        return ParseResult();
+      i += root->path.size();
     }
   }
-  return ParseResult{true, root->methods[method], params};
+
+  return ParseResult{true, root->getHandler(method), params};
 }
 
-}  // namespace radixtreee
+}  // namespace radixtree

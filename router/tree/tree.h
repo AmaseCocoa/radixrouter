@@ -1,5 +1,5 @@
 /*
-* Radix Tree in C++
+* Radix Tree in C++. <Copyright 2016 Lime lime.syh@gmail.com>
 */
 
 #ifndef TREE_H
@@ -7,57 +7,78 @@
 
 #include <string>
 #include <vector>
-#include <unordered_map>
 #include <tuple>
-#include <memory>
 
 namespace radixtree {
 
 using std::string;
 using std::vector;
-using std::unordered_map;
 using std::tuple;
-using std::shared_ptr;
-using std::make_shared;
+using std::pair;
+
+const char kAsterisk = '*';
+const char kColon = ':';
+const char kSlash = '/';
+
+typedef pair<string, string> Parameter;
+
+struct Params {
+  Parameter *params;
+  int size;
+};
 
 struct Request {
   string path;
   string method;
-  unordered_map<string, string> params;
+  Params params;
 
-  Request(string path, string method);
+  Request(const string &path, const string &method);
 };
 
-typedef void (*HandleFunc)(shared_ptr<Request>);
-typedef tuple<bool, HandleFunc, unordered_map<string, string>> ParseResult;
+typedef void (*HandleFunc)(Request *req);
+typedef tuple<bool, HandleFunc, Params> ParseResult;
 
-const char ASTERISK = '*';
-const char COLON = ':';
-const char SLASH = '/';
+struct Handler {
+  string method;
+  HandleFunc handler;
+};
 
 struct RadixTreeNode {
   string path;
-  unordered_map<string, HandleFunc> methods;
-  unordered_map<char, shared_ptr<RadixTreeNode>> children;
+  vector<Handler> handlers;
+  string indices;
+  vector<RadixTreeNode*> children;
+  int maxParams;
 
   RadixTreeNode() = default;
-  RadixTreeNode(string path);
-  int addMethods(const vector<string> &methods, HandleFunc handler);
+  explicit RadixTreeNode(const string &path);
+  ~RadixTreeNode();
+
+  HandleFunc getHandler(const string &method);
+  int addHandler(HandleFunc handler, const vector<string> &methods);
+
+  RadixTreeNode* insertChild(
+    char index,
+    RadixTreeNode *child);
+  RadixTreeNode* getChild(char index);
+  int getIndexPosition(char target);
 };
+
+int find(const string &str, char target, int start);
 
 class RadixTree {
-public:
-  RadixTree();
-  int insert(const string &key, HandleFunc handler,
-             const vector<string> &methods);
-  ParseResult get(const string &key, const string &method);
-private:
-  shared_ptr<RadixTreeNode> root;
-  inline int getpos(int i, int n) {
-    return (((i) + 1) % (n + 1) + n) % (n + 1);
-  };
+ public:
+    RadixTree();
+    ~RadixTree();
+    int insert(
+      const string &path,
+      HandleFunc handler,
+      const vector<string> &methods);
+    ParseResult get(const string &path, const string &method);
+ private:
+    RadixTreeNode *root;
 };
 
-}  // namespace radixtreee
+}  // namespace radixtree
 
 #endif

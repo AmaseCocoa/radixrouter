@@ -4,23 +4,28 @@ Router
 A high performance HTTP request router using Radix Tree inspired by
 `httprouter <https://github.com/julienschmidt/httprouter>`_
 
-Different from `httprouter <https://github.com/julienschmidt/httprouter>`_
----------------------------------------------------------------------------
+Features
+--------
 
-- Using binary search to find child
+- Using binary search to find child to avoid worst O(n)
 - More detailed conflict information
 
-C++ implementation VS Python implementation
--------------------------------------------
+C++ v Golang v Python
+---------------------
 
-Match path **/user/:name/:sex/:age** ten million times:
+Match path **/user/:name/:sex/:age** Ten Million times:
 
-  - C++ implementation cost about 3.7s
-  - Python implementation cost about 50s
+- Golang implementation cost about 2.7 seconds
+- C++ implementation cost about 3.7 seconds
+- Python implementation cost
 
-See `router/tree/test_tree.cc <https://github.com/shiyanhui/Router/blob/master/router/tree/test_tree.cc>`_ and
+  - CPython about 60 seconds
+  - PyPy about 3.7 seconds
+
+See `router/tree/tree.go <https://github.com/shiyanhui/Router/blob/master/router/tree/tree.go>`_,
+`router/tree/test_tree.cc <https://github.com/shiyanhui/Router/blob/master/router/tree/test_tree.cc>`_ and
 `router/tree/test_tree.py <https://github.com/shiyanhui/Router/blob/master/router/tree/test_tree.py>`_ for more
-information.
+details.
 
 How to use it
 -------------
@@ -33,7 +38,7 @@ More
 
 `example/ <https://github.com/shiyanhui/Router/tree/master/example>`_ contains several server-side simple examples.
 
-Licence
+License
 -------
 
-MIT.
+The MIT License.

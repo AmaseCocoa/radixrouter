@@ -1,8 +1,8 @@
-Router
+radixrouter
 ======
 
 A high performance HTTP request router using Radix Tree inspired by
-`httprouter <https://github.com/julienschmidt/httprouter>`_
+`httprouter <https://github.com/julienschmidt/httprouter>`_. forked from [shiyanhui/Router](https://github.com/shiyanhui/Router)
 
 Features
 --------
